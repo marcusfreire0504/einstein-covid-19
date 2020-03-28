@@ -4,7 +4,7 @@ library(naniar)
 library(readxl)
 library(caret)
 
-dataset <- ?read_excel(path = "data/dataset.xlsx", )
+dataset <- read_excel(path = "data/dataset.xlsx")
 
 #################################
 ### exploratory data analysis ###
@@ -104,7 +104,9 @@ fitControl <- trainControl(method = "cv",
                            savePred = TRUE, 
                            classProb = TRUE)
 
-#tune.grid <- expand.grid(maxdepth = )
+tune.grid <- expand.grid(mincriterion = seq(from = 0.01, 
+                                            to = .99, 
+                                            by = 0.01))
 
 set.seed(1)
 
@@ -115,12 +117,14 @@ y <- covid_train %>%
   select(`SARS-Cov-2 exam result`) %>%
   unlist()
 
-covid_rpart <- train(x, y,
+covid_ctree <- train(x, y,
                      method = "ctree", 
-                     #tuneGrid = tune.grid,
-                     trControl = fitControl,
-                     controls=ctree_control(maxsurrogate=2))
+                     tuneGrid = tune.grid,
+                     trControl = fitControl)
 
-covid_rpart
+prediction <- predict(covid_ctree, covid_test)
 
+confusionMatrix(prediction, covid_test$`SARS-Cov-2 exam result`)
+
+# high sensitivity, but very low specificity :(
 
