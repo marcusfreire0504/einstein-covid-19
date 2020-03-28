@@ -110,30 +110,17 @@ set.seed(1)
 
 x <- covid_train %>%
   select(-`SARS-Cov-2 exam result`)
+
 y <- covid_train %>%
-  select(`SARS-Cov-2 exam result`)
+  select(`SARS-Cov-2 exam result`) %>%
+  unlist()
 
-apply(covid_train, 2, var, na.rm = TRUE)
-
-covid_rpart <- train(`SARS-Cov-2 exam result` ~ .,
-                     data = covid_train,
-                     method = "rpart", 
+covid_rpart <- train(x, y,
+                     method = "ctree", 
                      #tuneGrid = tune.grid,
                      trControl = fitControl,
-                     na.action = na.pass)
+                     controls=ctree_control(maxsurrogate=2))
 
 covid_rpart
-
-ggplot(covid_rpart)
-
-ggplot(varImp(pima_rf))
-
-predicao <- predict(pima_rf, pima_teste)
-confusionMatrix(predicao, pima_teste$type)
-
-plot(gg_error(pima_rf$finalModel))
-
-
-
 
 
