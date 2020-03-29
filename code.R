@@ -179,7 +179,58 @@ confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 ### data imputation ###
 #######################
 
-system.time(covid <- mice(covid, meth = "rf", ntree = 5))
+system.time(covid <- mice(covid, meth = "rf", ntree = 5)) # be patient
 
+covid <- complete(covid_imp)
 
+################
+### modeling ###
+################
+
+# train/test split
+
+set.seed(1)
+
+index       <- createDataPartition(covid$SARS.Cov.2.exam.result, 
+                                   p = 0.75, 
+                                   list = FALSE)
+covid_train <- covid[ index, ]
+covid_test  <- covid[-index, ]
+
+dim(covid_train)
+table(covid_train$SARS.Cov.2.exam.result)
+
+dim(covid_test)
+table(covid_test$SARS.Cov.2.exam.result)
+
+# parameters for random forest
+
+fitControl <- trainControl(method = "cv",
+                           number = 5,
+                           savePred = TRUE, 
+                           classProb = TRUE)
+
+tune.grid <- expand.grid(mtry = 1:35)
+
+set.seed(1)
+
+x <- covid_train %>%
+  select(-SARS.Cov.2.exam.result)
+
+y <- covid_train %>%
+  select(SARS.Cov.2.exam.result) %>%
+  unlist()
+
+covid_rf <- train(x, y,
+                  method = "rf", 
+                  tuneGrid = tune.grid,
+                  trControl = fitControl)
+
+ggplot(covid_rf)
+
+prediction <- predict(covid_rf, covid_test)
+
+confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
+
+# high sensitivity, but very low specificity :(
 
