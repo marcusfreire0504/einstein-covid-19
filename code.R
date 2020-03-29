@@ -192,7 +192,7 @@ confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 ### data imputation ###
 #######################
 
-covid <- mice(covid, meth = "rf", ntree = 5) # be patient
+covid_imp <- mice(covid, meth = "rf", ntree = 5) # be patient
 
 covid <- complete(covid_imp)
 
