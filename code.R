@@ -3,8 +3,13 @@ theme_set(theme_bw())
 library(naniar)
 library(readxl)
 library(caret)
+library(mice)
 
 dataset <- read_excel(path = "data/dataset.xlsx")
+
+# fix column names
+
+names(dataset) <- make.names(names(dataset), unique = TRUE)
 
 #################################
 ### exploratory data analysis ###
@@ -17,10 +22,48 @@ glimpse(dataset)
 # remove columns that won't help on diagnosis
 
 dataset_clean <- dataset %>%
-  select(-`Patient ID`, 
-         -`Patient addmited to regular ward (1=yes, 0=no)`,
-         -`Patient addmited to semi-intensive unit (1=yes, 0=no)`,
-         -`Patient addmited to intensive care unit (1=yes, 0=no)`)
+  select(-Patient.ID, 
+         -Patient.addmited.to.regular.ward..1.yes..0.no.,
+         -Patient.addmited.to.semi.intensive.unit..1.yes..0.no.,
+         -Patient.addmited.to.intensive.care.unit..1.yes..0.no.)
+
+# convert level Urine...Leukocytes <1000 to 1000
+
+dataset_clean$Urine...Leukocytes[dataset_clean$`Urine...Leukocytes` == "<1000"] <- 1000
+dataset_clean$`Urine...Leukocytes` <- as.numeric(dataset_clean$`Urine...Leukocytes`)
+
+# fix Urine...pH
+
+dataset_clean$`Urine...pH`[dataset_clean$`Urine...pH` == "Não Realizado"] <- NA
+dataset_clean$`Urine...pH` <- as.numeric(dataset_clean$`Urine...pH`)
+
+# Urine...Hemoglobin
+
+dataset_clean$`Urine...Hemoglobin`[dataset_clean$`Urine...Hemoglobin` == "not_done"] <- NA
+
+# Urine...Aspect
+
+dataset_clean$`Urine...Aspect` <- factor(dataset_clean$`Urine...Aspect`, 
+                                         levels = c("clear", "lightly_cloudy", "cloudy", "altered_coloring"))
+
+# Strepto A
+
+dataset_clean$`Strepto.A`[dataset_clean$`Strepto.A` == "not_done"] <- NA
+
+# transform character to factor
+
+dataset_clean_num <- dataset_clean %>%
+  select_if(is.numeric)
+
+dataset_clean_cat <- dataset_clean %>%
+  select_if(negate(is.numeric)) %>%
+  mutate_all(as.factor)
+
+dataset_clean <- base::cbind(dataset_clean_num, dataset_clean_cat)
+
+# fix factor levels
+
+# sort(sapply(dataset_clean[,sapply(dataset_clean, is.factor)], nlevels))
 
 # let's take a look on missing data
 
@@ -49,23 +92,21 @@ vis_miss(dataset_clean) +
 
 n <- 500
 
-columns <- names(dataset_clean)[which(missing_values$num.missing >= dim(dataset_clean)[1]-n)]
+dataset_clean <- dataset_clean[, which(dim(dataset_clean)[1] - apply(apply(dataset_clean, 2, is.na), 2, sum) >= n)]
 
-dataset_model <- dataset_clean %>%
-  select(all_of(columns))
+# remove quantitative variables with variance equal to zero 
 
-# remove variables with variance equal to zero 
-
-dataset_model_num <- dataset_model %>%
+dataset_model_num <- dataset_clean %>%
   select_if(is.numeric)
 
-dataset_model_num[, -which(apply(dataset_model_num, 2, var, na.rm = TRUE) == 0)]
+if (sum(apply(dataset_model_num, 2, var, na.rm = TRUE) == 0) != 0) {
+  dataset_model_num <- dataset_model_num[, which(apply(dataset_model_num, 2, var, na.rm = TRUE) == 0)]
+}
 
-# remove variables with only one level 
+# remove categorical variables with only one level 
 
-dataset_model_cat <- dataset_model %>%
-  select_if(negate(is.numeric)) %>%
-  mutate_all(as.factor)
+dataset_model_cat <- dataset_clean %>%
+  select_if(negate(is.numeric))
 
 dataset_model_cat <- dataset_model_cat[, sapply(dataset_model_cat, nlevels) > 1]
   
@@ -73,6 +114,8 @@ dataset_model_cat <- dataset_model_cat[, sapply(dataset_model_cat, nlevels) > 1]
 
 dataset_model <- cbind(dataset_model_num, dataset_model_cat)
 
+vis_miss(dataset_clean) +
+  theme(axis.text.x = element_text(size = 6))
 
 
 ################
@@ -85,17 +128,17 @@ covid <- dataset_model
 
 set.seed(1)
 
-index       <- createDataPartition(covid$`SARS-Cov-2 exam result`, 
+index       <- createDataPartition(covid$SARS.Cov.2.exam.result, 
                                    p = 0.75, 
                                    list = FALSE)
 covid_train <- covid[ index, ]
 covid_test  <- covid[-index, ]
 
 dim(covid_train)
-table(covid_train$`SARS-Cov-2 exam result`)
+table(covid_train$SARS.Cov.2.exam.result)
 
 dim(covid_test)
-table(covid_test$`SARS-Cov-2 exam result`)
+table(covid_test$SARS.Cov.2.exam.result)
 
 # parameters for cart
 
@@ -111,10 +154,10 @@ tune.grid <- expand.grid(mincriterion = seq(from = 0.01,
 set.seed(1)
 
 x <- covid_train %>%
-  select(-`SARS-Cov-2 exam result`)
+  select(-SARS.Cov.2.exam.result)
 
 y <- covid_train %>%
-  select(`SARS-Cov-2 exam result`) %>%
+  select(SARS.Cov.2.exam.result) %>%
   unlist()
 
 covid_ctree <- train(x, y,
@@ -122,9 +165,21 @@ covid_ctree <- train(x, y,
                      tuneGrid = tune.grid,
                      trControl = fitControl)
 
+ggplot(covid_ctree)
+
 prediction <- predict(covid_ctree, covid_test)
 
-confusionMatrix(prediction, covid_test$`SARS-Cov-2 exam result`)
+confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 
 # high sensitivity, but very low specificity :(
+
+
+
+#######################
+### data imputation ###
+#######################
+
+system.time(covid <- mice(covid, meth = "rf", ntree = 5))
+
+
 
