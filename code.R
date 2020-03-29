@@ -3,6 +3,8 @@ theme_set(theme_bw())
 library(naniar)
 library(readxl)
 library(caret)
+library(reshape2)
+library(GGally)
 library(mice)
 
 dataset <- read_excel(path = "data/dataset.xlsx")
@@ -90,7 +92,7 @@ vis_miss(dataset_clean) +
 
 # keep only columns with at least n observations
 
-n <- 500
+n <- 1000
 
 dataset_clean <- dataset_clean[, which(dim(dataset_clean)[1] - apply(apply(dataset_clean, 2, is.na), 2, sum) >= n)]
 
@@ -112,10 +114,19 @@ dataset_model_cat <- dataset_model_cat[, sapply(dataset_model_cat, nlevels) > 1]
   
 # final dataset
 
-dataset_model <- cbind(dataset_model_num, dataset_model_cat)
+dataset_model <- base::cbind(dataset_model_num, dataset_model_cat)
 
-vis_miss(dataset_clean) +
+vis_miss(dataset_model) + # it needs naniar package
   theme(axis.text.x = element_text(size = 6))
+
+# some other plots
+
+ggpairs(dataset_model[, c(1:10)])
+
+ggpairs(dataset_model[, c(11:ncol(dataset_model))])
+
+# it seems there is no relation between any pair of variables
+
 
 
 ################
@@ -171,6 +182,8 @@ prediction <- predict(covid_ctree, covid_test)
 
 confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 
+# 90% accuracy seems good, but No Information Rate is also 90%
+# so, using this model or a random process gives the same answer
 # high sensitivity, but very low specificity :(
 
 
@@ -179,7 +192,7 @@ confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 ### data imputation ###
 #######################
 
-system.time(covid <- mice(covid, meth = "rf", ntree = 5)) # be patient
+covid <- mice(covid, meth = "rf", ntree = 5) # be patient
 
 covid <- complete(covid_imp)
 
@@ -227,10 +240,6 @@ covid_rf <- train(x, y,
                   trControl = fitControl)
 
 ggplot(covid_rf)
-
-prediction <- predict(covid_rf, covid_test)
-
-confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
 
 # high sensitivity, but very low specificity :(
 
