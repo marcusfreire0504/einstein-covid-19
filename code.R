@@ -241,5 +241,9 @@ covid_rf <- train(x, y,
 
 ggplot(covid_rf)
 
+prediction <- predict(covid_rf, covid_test)
+
+confusionMatrix(prediction, covid_test$SARS.Cov.2.exam.result)
+
 # high sensitivity, but very low specificity :(
 
